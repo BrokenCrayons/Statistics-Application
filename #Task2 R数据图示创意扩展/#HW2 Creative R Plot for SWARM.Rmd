@@ -1,0 +1,127 @@
+---
+title: '#HW2 Creative R Plot for SWARM'
+output: html_document
+---
+
+### 简单的相关图
+```{r}
+library(foreign)
+library(ggplot2)
+library(magrittr)
+library(ggpubr)
+
+# use file.choose() to locate the file
+nyc_locpro <- read.csv("/Users/wujiawen/Desktop/2018 Autumn/统计软件应用/#HW2 Creative R Plot/swarm_data/nyc/nyc_local_profile.csv")
+
+# have a general idea of the dataset
+str(nyc_locpro) 
+summary(nyc_locpro)
+Op_nyc_locpro <- subset(nyc_locpro,select = c("checkins_count","photos_count","friends_count"))
+str(Op_nyc_locpro)
+# correlation matrix for 3 variables
+Op_corr <- cor(Op_nyc_locpro, method = "pearson", use = "complete.obs")
+Op_corr <- round(Op_corr, 3) #保留三位小数点
+
+library(corrplot)
+corrplot(Op_corr, type = "full", order = "hclust", tl.col = "black", tl.srt = 45,tl.cex = .68,addCoef.col="black", number.cex = .58)
+
+# with distribution
+library(PerformanceAnalytics)
+chart.Correlation(Op_nyc_locpro, histogram=TRUE, pch=19, text.col = 'b')
+
+```
+
+
+### 数据处理及数据可视化
+```{r}
+# use file.choose() to locate the file
+nyc_locchk <- read.csv("/Users/wujiawen/Desktop/2018 Autumn/统计软件应用/#HW2 Creative R Plot/swarm_data/nyc/nyc_local_checkin.csv")
+nyc_trachk <- read.csv("/Users/wujiawen/Desktop/2018 Autumn/统计软件应用/#HW2 Creative R Plot/swarm_data/nyc/nyc_travler_checkin.csv")
+str(nyc_locchk)
+time <- nyc_locchk$created_time
+# time <- as.character(time)
+# time_split <- strsplit(time[]," ") 以空格为分格分为两节
+
+# interactive R plot
+# Library
+library(dygraphs)
+library(xts)          # To make the convertion data-frame / xts format
+library(tidyverse)
+library(lubridate)
+
+date <- substr(time[],1,10) # 取出date的部分
+date_count <- as.data.frame(table(date)) #每天的check-in人数
+str(date_count)
+date_fac <- date_count$date 
+# convert it to a date-time format
+# date_fac <- ymd_hms(date_fac) 
+date_count$date <- as.Date(date_fac)
+don=xts(x = date_count$Freq , order.by = date_count$date)
+dygraph(don) %>%
+  dyOptions(labelsUTC = TRUE,fillAlpha=.2, fillGraph=TRUE, drawGrid = FALSE,colors="#D8AE5A") %>%
+  # dygraph interactive range selection and zooming
+  dyRangeSelector() %>%
+  # draws a crosshair line over the point closest to the mouse
+  dyCrosshair(direction = "both") %>% # vertical + horizontal
+  # mouse-over highlighting
+  dyHighlight(highlightCircleSize = 5, highlightSeriesBackgroundAlpha = 0.2, hideOnMouseOut = FALSE)  %>%
+  # dygraph rolling average period text box
+  dyRoller(rollPeriod = 1)
+
+# Month Count & Weeks daily count
+month <- substr(time[],6,7)
+month_count <- as.data.frame(table(month))
+month_name <- c("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+my_bar <- barplot(month_count$Freq , border=F , names.arg=month_name, las=2 , col=c(rgb(0.3,0.1,0.4,0.6) , rgb(0.3,0.5,0.4,0.6) , rgb(0.3,0.9,0.4,0.6) ,  rgb(0.3,0.9,0.4,0.6)) , ylim = c(40000,60000), main="NewYorkers' Check-in Plot" )
+
+library(ggplot2)
+date <- substr(time[],1,10) 
+date <- as.Date(date)
+weekday <- weekdays(date) 
+weekday_count <- as.data.frame(table(weekday))
+order(weekday_count[,2])
+# sort by weekdays
+weekday_count$weekday <- factor(weekday_count$weekday, levels= c("Sunday", "Monday", 
+    "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+weekday_count[order(weekday_count$weekday), ]
+# plot
+ggplot(weekday_count,aes(x=weekday, y=Freq)) +
+  geom_segment(aes(x=weekday, xend=weekday, y=65000, yend=Freq),color="grey") +
+  geom_point( color="orange", size=4) +
+  theme_light() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  xlab("Weekdays") +
+  ylab("Numbers of Check-in") +
+  ggtitle("NewYorkers' Weekdays Check-in Plot")
+ 
+```
+
+### 在地图上画数据点
+```{r}
+# Plot the map
+# 1 Download the shapefile.
+# 2 Read this shape file with the rgdal library. 
+library(rgdal)
+library(yarrr) # for creating transparent scatterplot
+my_spdf=readOGR(dsn = '/Users/wujiawen/Desktop/2018 Spring/MATLAB/学习资料/nyc/Borough Boundaries/geo_export_c570c27b-80d3-4d70-bf1e-90bab805fa8c.shp') 
+# -- > Now you have a Spdf object (spatial polygon data frame). You can start doing maps!
+# Basic plot of this shape file:
+par(mar=c(0,0,0,0))
+# https://color.adobe.com/zh/explore/?filter=most-popular&time=month using this cite to find your color
+plot(my_spdf, col="#87AEB4", fill=TRUE, bg = "#CDD4CA", lwd=0.35, mar=rep(0,4), border=1 )
+str(nyc_locchk)
+points(nyc_locchk$lng, nyc_locchk$lat, col = transparent("#F2BE54",0.9), cex = .6, pch = 19)
+points(nyc_trachk$lng, nyc_trachk$lat, col = transparent("#153E5C",0.9), cex = .6, pch = 19)
+text(-74.2,40.66,'Staten Island',cex = 1)
+text(-74.00,40.56,'Brooklyn',cex = 1)
+text(-73.86,40.92,'The Bronx',cex = 1)
+text(-74.08,40.76,'Manhattan',cex = 1)
+text(-73.69,40.7,'Queens',cex = 1)
+# title(line = -16,'Newyorker & Traveler Check-in Plot',cex = 1.5,outer = TRUE)
+legend("bottomright",legend = c("Local","Traveler"),pch = 19,cex = 1, col = c("#F2BE54","#153E5C"),bty = "n")
+```
+
