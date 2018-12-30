@@ -19,3 +19,4 @@
   - ggplot Leaflet and Shiny Plot
 * 自选3 Task-for-Use 制作Super的生涯彩虹图
   - R中circlize包的应用
+* 自选4 R随机森林算法:预测高中生数学成绩
