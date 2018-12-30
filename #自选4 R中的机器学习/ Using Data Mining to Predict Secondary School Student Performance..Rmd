@@ -1,0 +1,122 @@
+---
+title: "USING DATA MINING TO PREDICT SECONDARY SCHOOL STUDENT PERFORMANCE"
+author: "Jiawen Wu"
+date: "12/30/2018"
+output: html_document
+---
+# Prepare environment
+```{r}
+library(randomForest)
+library(openxlsx)
+library(dplyr)
+library(caret)
+```
+
+# Prepare dataset
+```{r}
+# Math course
+d1=read.table("/Users/wujiawen/Desktop/2018 Autumn/统计软件应用/#自选4 机器学习/学习成绩3/student/student-mat.csv",sep=";",header=TRUE)
+# Portuguese language course
+d2=read.table("/Users/wujiawen/Desktop/2018 Autumn/统计软件应用/#自选4 机器学习/学习成绩3/student/student-por.csv",sep=";",header=TRUE)
+str(d1); print(nrow(d1)) # 395 students
+str(d2); print(nrow(d2)) # 649 students
+# attend both Math course and Portuguese language course
+d3=merge(d1,d2,by=c("school","sex","age","address","famsize","Pstatus","Medu","Fedu","Mjob","Fjob","reason","nursery","internet"))
+str(d3); print(nrow(d3)) # 382 students
+```
+变量的信息可以在论文中查到，都列得很清楚了，其中前面的29个参数来自于问卷，后面4个参数是学生学校出勤及成绩，来自于学校。
+
+# Check/clean the datasets
+```{r}
+d1[!complete.cases(d1),] # 将含有NA值的case筛选出来 -> 没有缺失值
+manyNAs(d1, 0.2) # 返回含有较多NA值的case行数，NA值的个数超过了所有参数的20%定义为缺失值较多
+d2[!complete.cases(d2),]
+manyNAs(d2, 0.2) 
+d1$G3score.level <- cut(d1$G3,breaks=c(-Inf,10,Inf),labels=c('fail','pass'))
+plot(d1$G3score.level)
+d1_math <- d1[,c(-33)]
+# d1_math <- d1[,c(-33,-32)]
+str(d1_math)
+
+# d1_math <- d1_math %>% mutate_if(is.character,as.factor) # 有可能需要处理一下数据类型
+
+```
+
+# 抽取样本
+```{r}
+set.seed(54321)
+indexes <- createDataPartition(d1_math$G3score.level, # caret::reateDataPartition allow you to create stratified random samples 
+                               times = 1,
+                               p = 0.7,
+                               list = FALSE) # 我们working on的数据集要和现实中的人群分布一致 
+d1_math.train <- d1_math[indexes,]
+d1_math.test <- d1_math[-indexes,]
+str(d1_math.train)
+prop.table(table(d1_math$G3score.level))
+prop.table(table(d1_math.train$G3score.level))
+prop.table(table(d1_math.test$G3score.level))
+```
+
+# Random Forest - 可以给出袋外错误率
+```{r}
+# 在使用模型前，我们需要确定，要生成多少棵树构建森林，
+# 即模型中ntree参数的具体值，可通过图形大致判断模型内误差稳定时的值。
+set.seed(12345)
+rf_ntree <- randomForest(G3score.level ~.,data=d1_math.train,ntree=1000)
+plot(rf_ntree)
+d1_math_rf <- randomForest(G3score.level ~.,data=d1_math.train,ntree=800,mtry = 9,
+                        proximity= TRUE)
+d1_math_rf
+plot(d1_math_rf)
+importance(d1_math_rf)
+varImpPlot(d1_math_rf)
+
+MDSplot(d1_math_rf, d1_math.train$G3score.level,k=2,palette=c("#E8948E","#3E91BA"))
+
+```
+
+
+# 用训练集来进行检验
+```{r}
+d1_math_pred <- predict(d1_math_rf,newdata=d1_math.test)
+freq_d1_math_pred <- table(d1_math_pred,d1_math.test$G3score.level)
+# plot(margin(d1_math_rf, d1_math.test$G3score.level))
+PCC <- sum(diag(freq_d1_math_pred))/sum(freq_d1_math_pred)
+```
+
+# 选取随机森林mtry值对模型进行优化
+```{r}
+n <- length(names(d1_math.train))
+set.seed(12345)
+for (i in 1:(n-1)){
+  model <- randomForest(G3score.level ~., data = d1_math.train, mtry = i)
+  err <- mean(model$err.rate)
+  print(err)
+}
+# 9 min = 0.05503825
+d1_math_rf1 <- randomForest(G3score.level ~.,data=d1_math.train,ntree=800,mtry=9,
+                        proximity= TRUE)
+d1_math_rf1
+```
+
+## Rcode provided in the paper
+```{r}
+library(rminer)
+K=c("kfold",10) # 10-fold cross-validation
+# execute 10 runs of a DT classification:
+DT=mining(G3score.level~.,d1_math.train,model="dt",Runs=20,method=K)
+# show mean classification error on test set:
+print(mean(DT$error))
+```
+
+
+
+
+
+
+
+
+
+
+
+
